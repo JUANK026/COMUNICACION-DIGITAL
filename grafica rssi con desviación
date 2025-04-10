@@ -1,0 +1,88 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+def cargar_y_analizar_archivo(nombre_archivo="/content/rssi_measurements-parkingtx.txt", tamaño_muestra=200):
+    try:
+        # Cargar el archivo
+        with open(nombre_archivo, 'r', encoding='utf-8') as archivo:
+            lineas = archivo.readlines()
+
+        # Convertir las líneas a números (asumiendo una columna de datos)
+        datos = [float(linea.strip()) for linea in lineas if linea.strip()]
+
+        # Verificar que tengamos 3000 datos (15 grupos de 200)
+        if len(datos) != 3000:
+            return f"Error: Se esperaban 3000 datos, se encontraron {len(datos)}"
+
+        # Dividir en grupos de 200 y calcular estadísticas
+        resultados = []
+        for i in range(0, 3000, tamaño_muestra):
+            muestra = datos[i:i + tamaño_muestra]
+            media = np.mean(muestra)
+            desviacion = np.std(muestra)
+            resultados.append({
+                'inicio': i + 1,
+                'fin': i + tamaño_muestra,
+                'media': media,
+                'desviacion': desviacion
+            })
+
+        return resultados
+
+    except FileNotFoundError:
+        return "Error: El archivo no se encuentra en /content/rssi_measurements-canchatx.txt"
+    except ValueError:
+        return "Error: Algunos datos no son numéricos"
+    except Exception as e:
+        return f"Error al procesar el archivo: {str(e)}"
+
+def graficar_resultados(resultados):
+    # Preparar datos para el gráfico
+    etiquetas = [f"{r['inicio']}-{r['fin']}" for r in resultados]
+    medias = [r['media'] for r in resultados]
+    desviaciones = [r['desviacion'] for r in resultados]
+
+    # Crear el gráfico
+    plt.figure(figsize=(12, 8))
+    plt.errorbar(range(len(medias)), medias, yerr=desviaciones, fmt='o', color='red',
+                 ecolor='blue', capsize=5, capthick=2, markersize=8, label='Promedio')
+
+    # Añadir etiquetas para las medias y desviaciones
+    for i, (media, desviacion) in enumerate(zip(medias, desviaciones)):
+        # Etiqueta para la media (arriba del punto)
+        plt.text(i, media + desviacion + 1, f'{media:.2f}',
+                 ha='center', va='bottom', fontsize=8, color='black')
+        # Etiqueta para la desviación (en la barra de error superior)
+        plt.text(i, media + desviacion + 0.5, f'±{desviacion:.2f}',
+                 ha='center', va='bottom', fontsize=8, color='blue')
+
+    # Personalizar el gráfico
+    plt.xticks(range(len(medias)), etiquetas, rotation=45)
+    plt.xlabel('Rango de Muestras')
+    plt.ylabel('Nivel de Señal (dBm)')
+    plt.title('Medias y Desviaciones Estándar por Grupo de 200 Muestras')
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.legend()
+    plt.tight_layout()
+
+    # Mostrar el gráfico
+    plt.show()
+
+# Ejemplo de uso
+if __name__ == "__main__":
+    # Usar la ruta específica por defecto
+    resultados = cargar_y_analizar_archivo()
+
+    # Imprimir resultados
+    if isinstance(resultados, list):
+        print("Resultados del análisis (15 grupos de 200 muestras):")
+        print("-" * 60)
+        print(f"{'Rango':<15} {'Media':>12} {'Desv. Estándar':>15}")
+        print("-" * 60)
+        for r in resultados:
+            print(f"Muestras {r['inicio']:>4}-{r['fin']:<4} {r['media']:>12.4f} {r['desviacion']:>15.4f}")
+
+        # Generar y mostrar el gráfico
+        graficar_resultados(resultados)
+    else:
+        print(resultados)
