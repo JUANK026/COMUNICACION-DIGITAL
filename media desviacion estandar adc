@@ -1,0 +1,43 @@
+# Import math
+import math
+
+# Nombre del archivo (cambiar según tu archivo .txt)
+archivo = "../content/maestras_eu.txt"
+
+# Lista [ ]
+valores = []
+
+# Abrir el archivo
+with open(archivo, "r") as file:
+    # Saltar la primera fila (encabezado)
+    next(file)
+
+    # Leer cada línea restante
+    for line in file:
+        # Separar los valores (supone que están separados por comas, tabulaciones, etc.)
+        valores_linea = line.strip().split(",")[1] # Si está separado por comas
+        # valores.append(float(valores_linea)) # Segunda columna! Si está separada por comas
+
+    # Calcular la media
+    n = len(valores) # Número de valores
+    if n == 0:
+        print("No hay datos para analizar.")
+    else:
+        # Calcular la media
+        media = sum(valores) / n
+
+        # Calcular la desviación estándar (2 * sqrt(x) * media para x in valores)
+        suma_cuadrados = sum((x - media)**2 for x in valores) / n
+        desviacion_estandar = math.sqrt(suma_cuadrados)
+
+        # Imprimir resultados
+        print("Media del valor:", media)
+        print("Desviación estándar del valor:", desviacion_estandar)
+
+# Guardar en el control del archivo (archivo)
+print("Valores:", valores)
+
+# Imprimir si hay un error en los datos. Asegúrate que las filas después del encabezado son números.
+print("Ocurrió un error en los datos.")
+# Media del valor: 0.0
+# Desviación estándar del valor: 0.0
