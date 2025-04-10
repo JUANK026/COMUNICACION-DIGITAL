@@ -1,0 +1,74 @@
+from micropython import const
+from time import sleep
+import time
+from machine import I2C, Pin, SPI
+from utime import ticks_diff, ticks_us
+from nrf24l01 import NRF24L01
+import network
+from ssd1306 import SSD1306_I2C
+
+
+POWER_0 = const(0x00)  # -18 dBm
+POWER_1 = const(0x02)  # -12 dBm
+POWER_2 = const(0x04)  # -6 dBm
+POWER_3 = const(0x06)  # 0 dBm
+SPEED_1M = const(0x00)
+SPEED_2M = const(0x08)
+SPEED_250K = const(0x20)
+
+csn = Pin(5, Pin.OUT) #Pines CSN y CE de la NRF
+ce = Pin(17, Pin.OUT)
+
+spi = SPI(0, baudrate=20000000, polarity=0, phase=0, sck=Pin(18), mosi=Pin(19), miso=Pin(16)) # Configuración del bus SPI
+
+nrf = NRF24L01(spi, csn, ce , channel=68, payload_size=16) #Configuracion nrf
+address = b'4node'  # Dirección del pipe de transmisión
+#nrf.set_power(3)  # Máxima potencia (0 dBm)
+#nrf.set_data_rate(NRF24L01.RATE_2M)  # Máxima velocidad (2 Mbps)
+nrf.open_tx_pipe(address) # Abrir canal de transmisión
+
+# Programa para medir la intensidad de señal WiFi (RSSI)
+# Universidad Militar Nueva Granada - Ingeniería en Telecomunicaciones
+# jose.rugeles@unimilitar.edu.co
+
+
+# Configuración OLED
+
+# Configuración WiFi
+wifi = network.WLAN(network.STA_IF)
+wifi.active(True)
+ssid = "Redmi"
+password = "12345678"
+
+# Conexión a la red WiFi
+wifi.connect(ssid, password)
+while not wifi.isconnected():
+    time.sleep(2)
+
+print("Conexión establecida!")
+print("Dirección IP:", wifi.ifconfig()[0])
+
+def enviar_mensaje(rssi_average): #Funcion para enviar el mensaje
+    try: #Si se puede
+        
+        nrf.send(rssi_average)  #Envia el mensaje
+        print("Mensaje enviado: ", rssi_average) #Se confirma el envio
+        estado = nrf.reg_read(0x07)  #se lee el estado del envio
+        print("Estado del registro STATUS: ", bin(estado)) #Se muestra el estado del envio
+        
+    except OSError: #Si no se puede enviar 
+        print("Error al enviar el mensaje") #Se confirma la imposibilidad de enviar el mensaje
+
+# Bucle principal
+while True:
+    rssi_values = []
+    
+    # Toma 10 muestras de RSSI
+    for _ in range(10):
+        rssi = wifi.status('rssi')
+        rssi_values.append(rssi)
+
+    # Calcula el promedio
+    rssi_average = sum(rssi_values) / len(rssi_values)
+    rssi_average = str(rssi_average)
+    enviar_mensaje(rssi_average)
