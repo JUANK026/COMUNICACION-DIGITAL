@@ -1,0 +1,145 @@
+import network
+import time
+import math
+import os
+from machine import Pin, I2C
+from ssd1306 import SSD1306_I2C
+
+# 1. Configuración: Definir pines GPIO y inicializar hardware
+WIDTH = 128
+HEIGHT = 32
+i2c = I2C(1, scl=Pin(15), sda=Pin(14), freq=200000)  # OLED I2C
+oled = SSD1306_I2C(WIDTH, HEIGHT, i2c)
+
+# Configuración de pines
+button = Pin(18, Pin.IN, Pin.PULL_UP)  # Pulsador con pull-up interno
+led_advance = Pin(16, Pin.OUT)         # LED "Avanzar"
+led_measuring = Pin(17, Pin.OUT)       # LED "Midiendo"
+led_wifi = Pin(19, Pin.OUT)            # LED "WiFi"
+
+# Inicialización de LEDs
+led_advance.off()
+led_measuring.off()
+led_wifi.off()
+
+# Configuración WiFi
+wifi = network.WLAN(network.STA_IF)
+wifi.active(True)
+ssid = "Anderson"
+password = "12345678"
+
+# 2. Función para conexión y reconexión WiFi
+def connect_wifi():
+    oled.fill(0)
+    oled.text("Conectando...", 0, 10)
+    oled.show()
+    
+    if not wifi.isconnected():
+        wifi.connect(ssid, password)
+        attempts = 0
+        while not wifi.isconnected() and attempts < 10:
+            led_wifi.on()
+            time.sleep(0.5)
+            led_wifi.off()
+            time.sleep(0.5)
+            attempts += 1
+        
+        if wifi.isconnected():
+            oled.fill(0)
+            oled.text("Conectado!", 0, 10)
+            oled.show()
+            print("Conexión establecida!")
+            print("Dirección IP:", wifi.ifconfig()[0])
+            return True
+        else:
+            oled.fill(0)
+            oled.text("Sin conexión", 0, 10)
+            oled.show()
+            return False
+    return True
+
+# Inicializar conexión
+connect_wifi()
+
+# 3 y 4. Medición e interacción
+def measure_rssi(distance):
+    rssi_values = []
+    led_measuring.on()
+    
+    # Tomar 200 muestras en 20 segundos (0.1s por muestra)
+    for _ in range(200):
+        if wifi.isconnected():
+            rssi = wifi.status('rssi')
+            rssi_values.append(rssi)
+            # Visualización en tiempo real
+            oled.fill(0)
+            oled.text(f"Dist: {distance}m", 0, 0)
+            oled.text(f"RSSI: {rssi} dBm", 0, 10)
+            signal_bars(rssi)
+            oled.show()
+        else:
+            connect_wifi()
+        time.sleep(0.1)
+    
+    led_measuring.off()
+    
+    # Guardar todas las muestras en el archivo
+    save_measurements(rssi_values)
+    
+    # Calcular promedio y desviación estándar
+    rssi_avg = sum(rssi_values) / len(rssi_values)
+    variance = sum((x - rssi_avg) ** 2 for x in rssi_values) / len(rssi_values)
+    rssi_std = math.sqrt(variance)
+    
+    # Mostrar resultados en OLED
+    oled.fill(0)
+    oled.text(f"Dist: {distance}m", 0, 0)
+    oled.text(f"Media: {rssi_avg:.1f}", 0, 10)
+    oled.text(f"Std: {rssi_std:.1f}", 0, 20)
+    oled.show()
+    
+    return rssi_avg, rssi_std
+
+# 6. Visualización: Barras de señal
+def signal_bars(rssi):
+    bars = min(4, max(0, int((rssi + 100) / 10)))  # Escala de 0 a 4 barras
+    for i in range(4):
+        if i < bars:
+            oled.fill_rect(110 + i*5, 20 - i*5, 4, 5 + i*5, 1)
+        else:
+            oled.rect(110 + i*5, 20 - i*5, 4, 5 + i*5, 1)
+
+# 5. Almacenamiento: Guardar todas las muestras individuales en una columna
+def save_measurements(rssi_values):
+    with open('rssi_measurements.txt', 'a') as f:
+        for rssi in rssi_values:
+            f.write(f"{rssi}\n")  # Una columna con cada valor de RSSI
+
+# Bucle principal
+distance = 0
+while True:
+    oled.fill(0)
+    oled.text(f"Dist: {distance}m", 0, 10)
+    oled.text("Presione boton", 0, 20)
+    oled.show()
+    led_advance.on()
+    
+    # Esperar pulsador
+    while button.value() == 1:
+        if not wifi.isconnected():
+            connect_wifi()
+        time.sleep(0.1)
+    
+    led_advance.off()
+    
+    # Realizar medición
+    if wifi.isconnected():
+        rssi_avg, rssi_std = measure_rssi(distance)
+        print(f"Distancia: {distance}m, RSSI: {rssi_avg:.2f} dBm, Std: {rssi_std:.2f}")
+        # Esperar 10 segundos para mostrar los resultados antes de continuar
+        time.sleep(10)
+        distance += 1
+    else:
+        print("No hay conexión WiFi")
+    
+    time.sleep(0.5)  # Debounce del pulsador
